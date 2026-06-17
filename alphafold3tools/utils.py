@@ -1,3 +1,4 @@
+import json
 import re
 import string
 from argparse import ArgumentParser
@@ -64,3 +65,21 @@ def get_seednumbers(dir: str | Path) -> list[int]:
         {int(m.group(1)) for d in subdirs if (m := pattern.match(d.name))}
     )
     return sorted(seednumbers)
+
+
+def af3_json_dumps(data: dict, indent: int = 2) -> str:
+    """Serialize AF3 JSON with standard JSON double-quoted strings.
+
+    This keeps all string keys/values JSON-quoted while preserving numeric fields
+    such as version/modelSeeds as numbers.
+    """
+    alphafold_json = json.dumps(data, indent=indent, ensure_ascii=False)
+    return re.sub(
+        r'("(?:queryIndices|templateIndices|modelSeeds)": \[)([\s\n\d,]+)(\],?)',
+        lambda mtch: mtch[1] + re.sub(r"\n\s+", " ", mtch[2].strip()) + mtch[3],
+        alphafold_json,
+    )
+
+
+def write_af3_json(path: str | Path, data: dict, indent: int = 2) -> None:
+    Path(path).write_text(af3_json_dumps(data, indent=indent))

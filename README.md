@@ -97,6 +97,12 @@ af3tools msatojson -i input.a3m -o output.json \
 af3tools msatojson3 -i input.a3m -o input.json -n inputname
 ```
 
+複数の単一-chain MSA を与える場合は、入力順に chain A, B, C... へ割り当てて 1 つの JSON にまとめます。
+
+```bash
+af3tools msatojson3 -i chainA.a3m chainB.a3m chainC.a3m -o complex.json -n complex_name
+```
+
 When the input is a directory, `msatojson3` writes one JSON file per input A3M and creates a sibling `<json_stem>_msas/` directory containing the chain-specific A3M files referenced from that JSON.
 
 ### fastatojson
@@ -166,6 +172,35 @@ af3tools modjson -i input.json -o output.json [-n jobname] [-p] \
 
 > [!NOTE]
 > A `*_data.json` file in the AlphaFold3's output directory can be also used as an input JSON file of `modjson`.
+
+### modjson3
+
+`modjson3` extends `modjson` so you can add `smiles`, `rna`, `dna`, and `ccdCode` entries to an existing AlphaFold3 input JSON file.
+
+```bash
+af3tools modjson3 -i input.json -o output.json \
+  -a smiles 'CC(=O)OC1C[NH+]2CCC1CC2' \
+  -a rna AGCU \
+  -a dna ACTG \
+  -a ccdCode MG
+```
+
+You can also read additions from a file:
+
+```bash
+af3tools modjson3 -i input.json -o output.json -f file.txt
+```
+
+`file.txt` is a headerless two-column table split by one or more spaces:
+
+```text
+rna AGCU
+dna ACTG
+smiles "CC(=O)OC1C[NH+]2CCC1CC2"
+ccdCode MG
+```
+
+Quoted and unquoted values are both accepted in the file input. If a line has 3 or more columns, `modjson3` stops with an error and reports the line number. `-a` and `-f` can be mixed, and chain IDs are assigned in appearance order continuing from the IDs already present in the input JSON.
 
 ### paeplot
 

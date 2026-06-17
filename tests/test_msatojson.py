@@ -201,6 +201,11 @@ class TestMSAToJson3:
         assert "unpairedMsa" not in content["sequences"][0]["protein"]
         assert (tmp_path / "testcomplexseqs_msas" / "chain_A-B_unpaired.a3m").exists()
         assert (tmp_path / "testcomplexseqs_msas" / "chain_C-E_paired.a3m").exists()
+        written = output_json.read_text()
+        assert '"dialect": "alphafold3"' in written
+        assert '"id": [' in written
+        assert '"A"' in written
+        assert '"testcomplexseqs_msas/chain_A-B_unpaired.a3m"' in written
 
     def test_write_input_json_file_v4_monomer_keeps_empty_paired_msa(self, tmp_path):
         input_a3m = tmp_path / "q.a3m"

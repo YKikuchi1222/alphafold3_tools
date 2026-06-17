@@ -16,9 +16,12 @@ from alphafold3tools.msatojson import (
     get_paired_and_unpaired_msa,
     get_residuelens_stoichiometries,
     search_templates,
-    to_json,
 )
-from alphafold3tools.utils import add_version_option, int_id_to_str_id
+from alphafold3tools.utils import (
+    add_version_option,
+    int_id_to_str_id,
+    write_af3_json,
+)
 
 
 @dataclass
@@ -258,7 +261,7 @@ def write_input_json_file(
         hmmbuild_binary_path=hmmbuild_binary_path,
         hmmsearch_binary_path=hmmsearch_binary_path,
     )
-    outputjsonfile.write_text(to_json(content))
+    write_af3_json(outputjsonfile, content)
 
 
 def write_input_json_file_from_multiple_msas(
@@ -298,7 +301,7 @@ def write_input_json_file_from_multiple_msas(
         hmmbuild_binary_path=hmmbuild_binary_path,
         hmmsearch_binary_path=hmmsearch_binary_path,
     )
-    outputjsonfile.write_text(to_json(content))
+    write_af3_json(outputjsonfile, content)
 
 
 def _process_a3m_file(
