@@ -10,7 +10,10 @@ from alphafold3tools.msatojson import (
     int_id_to_str_id,
     split_a3msequences,
 )
-from alphafold3tools.msatojson3 import write_input_json_file as write_input_json_file_v4
+from alphafold3tools.msatojson3 import (
+    write_input_json_file as write_input_json_file_v4,
+    write_input_json_file_from_multiple_msas,
+)
 
 
 @pytest.fixture
@@ -190,14 +193,14 @@ class TestMSAToJson3:
         assert content["dialect"] == "alphafold3"
         assert content["version"] == 4
         assert content["sequences"][0]["protein"]["unpairedMsaPath"] == (
-            "testcomplexseqs_msas/chain_1_unpaired.a3m"
+            "testcomplexseqs_msas/chain_A-B_unpaired.a3m"
         )
         assert content["sequences"][0]["protein"]["pairedMsaPath"] == (
-            "testcomplexseqs_msas/chain_1_paired.a3m"
+            "testcomplexseqs_msas/chain_A-B_paired.a3m"
         )
         assert "unpairedMsa" not in content["sequences"][0]["protein"]
-        assert (tmp_path / "testcomplexseqs_msas" / "chain_1_unpaired.a3m").exists()
-        assert (tmp_path / "testcomplexseqs_msas" / "chain_2_paired.a3m").exists()
+        assert (tmp_path / "testcomplexseqs_msas" / "chain_A-B_unpaired.a3m").exists()
+        assert (tmp_path / "testcomplexseqs_msas" / "chain_C-E_paired.a3m").exists()
 
     def test_write_input_json_file_v4_monomer_keeps_empty_paired_msa(self, tmp_path):
         input_a3m = tmp_path / "q.a3m"
@@ -213,6 +216,51 @@ class TestMSAToJson3:
 
         content = json.loads(output_json.read_text())
         protein = content["sequences"][0]["protein"]
-        assert protein["unpairedMsaPath"] == "q_msas/chain_1_unpaired.a3m"
+        assert protein["unpairedMsaPath"] == "q_msas/chain_A_unpaired.a3m"
         assert protein["pairedMsa"] == ""
         assert "pairedMsaPath" not in protein
+
+    def test_write_input_json_file_v4_from_multiple_msas_assigns_chain_order(
+        self, tmp_path
+    ):
+        input_a = tmp_path / "chain_a.a3m"
+        input_b = tmp_path / "chain_b.a3m"
+        input_a.write_text(Path("./testfiles/1bjp_no_header.a3m").read_text())
+        input_b.write_text(Path("./testfiles/Q9I1F6-F1-msa_v6.a3m").read_text())
+        output_json = tmp_path / "multi.json"
+
+        write_input_json_file_from_multiple_msas(
+            inputmsafiles=[input_a, input_b],
+            name="multi",
+            outputjsonfile=output_json,
+            includetemplates=False,
+        )
+
+        content = json.loads(output_json.read_text())
+        assert content["version"] == 4
+        assert len(content["sequences"]) == 2
+        chain_a = content["sequences"][0]["protein"]
+        chain_b = content["sequences"][1]["protein"]
+        assert chain_a["id"] == ["A"]
+        assert chain_b["id"] == ["B"]
+        assert chain_a["unpairedMsaPath"] == "multi_msas/chain_A_unpaired.a3m"
+        assert chain_b["unpairedMsaPath"] == "multi_msas/chain_B_unpaired.a3m"
+        assert chain_a["pairedMsa"] == ""
+        assert chain_b["pairedMsa"] == ""
+
+    def test_write_input_json_file_v4_from_multiple_msas_rejects_multichain_input(
+        self, tmp_path
+    ):
+        input_a = tmp_path / "complex.a3m"
+        input_b = tmp_path / "chain_b.a3m"
+        input_a.write_text(Path("./testfiles/testcomplexseqs.a3m").read_text())
+        input_b.write_text(Path("./testfiles/Q9I1F6-F1-msa_v6.a3m").read_text())
+        output_json = tmp_path / "multi.json"
+
+        with pytest.raises(ValueError, match="exactly one chain"):
+            write_input_json_file_from_multiple_msas(
+                inputmsafiles=[input_a, input_b],
+                name="multi",
+                outputjsonfile=output_json,
+                includetemplates=False,
+            )

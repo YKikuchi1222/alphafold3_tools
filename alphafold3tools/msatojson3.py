@@ -3,6 +3,7 @@ import datetime
 import os
 import shutil
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -20,12 +21,53 @@ from alphafold3tools.msatojson import (
 from alphafold3tools.utils import add_version_option, int_id_to_str_id
 
 
+@dataclass
+class ChainMsaInput:
+    query_seq: str
+    pairedmsa: list[Seq]
+    unpairedmsa: list[Seq]
+    stoichiometry: int
+
+
 def _write_msa_file(path: Path, msas: list[Seq]) -> None:
     path.write_text(convert_msas_to_str(msas))
 
 
 def _relative_path(path: Path, start: Path) -> str:
     return os.path.relpath(path, start)
+
+
+def _chain_file_prefix(chain_ids: list[str]) -> str:
+    if len(chain_ids) == 1:
+        return f"chain_{chain_ids[0]}"
+    return f"chain_{chain_ids[0]}-{chain_ids[-1]}"
+
+
+def _parse_a3m_file(inputmsafile: str | Path) -> tuple[list[int], list[int], list[list[Seq]], list[list[Seq]]]:
+    inputmsafile = Path(inputmsafile)
+    with inputmsafile.open("r") as f:
+        lines = f.readlines()
+    residue_lens, stoichiometries = get_residuelens_stoichiometries(lines)
+    if len(residue_lens) != len(stoichiometries):
+        raise ValueError("Length of residue_lens and stoichiometries must be the same.")
+    pairedmsas, unpairedmsas = get_paired_and_unpaired_msa(
+        lines, residue_lens, len(residue_lens)
+    )
+    return residue_lens, stoichiometries, pairedmsas, unpairedmsas
+
+
+def _load_chain_msa_input(inputmsafile: str | Path) -> ChainMsaInput:
+    residue_lens, stoichiometries, pairedmsas, unpairedmsas = _parse_a3m_file(inputmsafile)
+    if len(residue_lens) != 1:
+        raise ValueError(
+            "When multiple input MSA files are provided, each file must contain exactly one chain."
+        )
+    return ChainMsaInput(
+        query_seq=unpairedmsas[0][0].sequence,
+        pairedmsa=pairedmsas[0],
+        unpairedmsa=unpairedmsas[0],
+        stoichiometry=stoichiometries[0],
+    )
 
 
 def generate_input_json_content(
@@ -55,8 +97,9 @@ def generate_input_json_content(
             int_id_to_str_id(chain_id_count + j + 1) for j in range(stoichiometries[i])
         ]
         chain_id_count += stoichiometries[i]
+        chain_prefix = _chain_file_prefix(chain_ids)
 
-        unpaired_path = msa_output_dir / f"chain_{i + 1}_unpaired.a3m"
+        unpaired_path = msa_output_dir / f"{chain_prefix}_unpaired.a3m"
         _write_msa_file(unpaired_path, unpairedmsas[i])
 
         protein: dict[str, Any] = {
@@ -67,7 +110,7 @@ def generate_input_json_content(
         }
 
         if pairedmsas[i]:
-            paired_path = msa_output_dir / f"chain_{i + 1}_paired.a3m"
+            paired_path = msa_output_dir / f"{chain_prefix}_paired.a3m"
             _write_msa_file(paired_path, pairedmsas[i])
             protein["pairedMsaPath"] = _relative_path(paired_path, json_parent_dir)
         else:
@@ -79,6 +122,79 @@ def generate_input_json_content(
             )
             templates_list = search_templates(
                 msa_a3m_string=convert_msas_to_str(unpairedmsas[i]),
+                pdb_database_path=pdb_database_path,
+                seqres_database_path=seqres_database_path,
+                savehmmsto=savehmmsto,
+                max_template_date=max_template_date,
+                max_subsequence_ratio=max_subsequence_ratio,
+                hmmbuild_binary_path=hmmbuild_binary_path,
+                hmmsearch_binary_path=hmmsearch_binary_path,
+            )
+        else:
+            templates_list = []
+        protein["templates"] = templates_list
+        sequences.append({"protein": protein})
+
+    return {
+        "dialect": "alphafold3",
+        "version": 4,
+        "name": f"{name}",
+        "sequences": sequences,
+        "modelSeeds": [1],
+        "bondedAtomPairs": None,
+        "userCCD": None,
+    }
+
+
+def generate_input_json_content_from_chain_msas(
+    name: str,
+    chain_msas: list[ChainMsaInput],
+    msa_output_dir: Path,
+    json_parent_dir: Path,
+    includetemplates: bool = False,
+    savehmmsto: bool = False,
+    pdb_database_path: str | os.PathLike[str] | None = None,
+    seqres_database_path: str | os.PathLike[str] | None = None,
+    max_template_date: datetime.date = datetime.date(2099, 12, 31),
+    max_subsequence_ratio: float | None = 0.95,
+    hmmbuild_binary_path: str | None = shutil.which("hmmbuild"),
+    hmmsearch_binary_path: str | None = shutil.which("hmmsearch"),
+) -> dict[str, Any]:
+    sequences = []
+    chain_id_count = 0
+    msa_output_dir.mkdir(parents=True, exist_ok=True)
+
+    for i, chain_msa in enumerate(chain_msas):
+        chain_ids = [
+            int_id_to_str_id(chain_id_count + j + 1)
+            for j in range(chain_msa.stoichiometry)
+        ]
+        chain_id_count += chain_msa.stoichiometry
+        chain_prefix = _chain_file_prefix(chain_ids)
+
+        unpaired_path = msa_output_dir / f"{chain_prefix}_unpaired.a3m"
+        _write_msa_file(unpaired_path, chain_msa.unpairedmsa)
+
+        protein: dict[str, Any] = {
+            "id": chain_ids,
+            "sequence": chain_msa.query_seq,
+            "modifications": [],
+            "unpairedMsaPath": _relative_path(unpaired_path, json_parent_dir),
+        }
+
+        if chain_msa.pairedmsa:
+            paired_path = msa_output_dir / f"{chain_prefix}_paired.a3m"
+            _write_msa_file(paired_path, chain_msa.pairedmsa)
+            protein["pairedMsaPath"] = _relative_path(paired_path, json_parent_dir)
+        else:
+            protein["pairedMsa"] = ""
+
+        if includetemplates:
+            logger.info(
+                f"Searching templates for chain {i + 1} with sequence length {len(chain_msa.query_seq)}..."
+            )
+            templates_list = search_templates(
+                msa_a3m_string=convert_msas_to_str(chain_msa.unpairedmsa),
                 pdb_database_path=pdb_database_path,
                 seqres_database_path=seqres_database_path,
                 savehmmsto=savehmmsto,
@@ -116,22 +232,14 @@ def write_input_json_file(
     hmmbuild_binary_path: str | None = shutil.which("hmmbuild"),
     hmmsearch_binary_path: str | None = shutil.which("hmmsearch"),
 ) -> None:
-    inputmsafile = Path(inputmsafile)
     outputjsonfile = Path(outputjsonfile)
-    with inputmsafile.open("r") as f:
-        lines = f.readlines()
-    residue_lens, stoichiometries = get_residuelens_stoichiometries(lines)
-    if len(residue_lens) != len(stoichiometries):
-        raise ValueError("Length of residue_lens and stoichiometries must be the same.")
+    residue_lens, stoichiometries, pairedmsas, unpairedmsas = _parse_a3m_file(inputmsafile)
     cardinality = len(residue_lens)
     logger.info(
         f"The input MSA file contains {cardinality} distinct polypeptide chains."
     )
     logger.info(f"Residue lengths: {residue_lens}")
     logger.info(f"Stoichiometries: {stoichiometries}")
-    pairedmsas, unpairedmsas = get_paired_and_unpaired_msa(
-        lines, residue_lens, cardinality
-    )
     msa_output_dir = outputjsonfile.parent / f"{outputjsonfile.stem}_msas"
     content = generate_input_json_content(
         name=f"{name}",
@@ -139,6 +247,46 @@ def write_input_json_file(
         stoichiometries=stoichiometries,
         pairedmsas=pairedmsas,
         unpairedmsas=unpairedmsas,
+        msa_output_dir=msa_output_dir,
+        json_parent_dir=outputjsonfile.parent,
+        includetemplates=includetemplates,
+        savehmmsto=savehmmsto,
+        pdb_database_path=pdb_database_path,
+        seqres_database_path=seqres_database_path,
+        max_template_date=max_template_date,
+        max_subsequence_ratio=max_subsequence_ratio,
+        hmmbuild_binary_path=hmmbuild_binary_path,
+        hmmsearch_binary_path=hmmsearch_binary_path,
+    )
+    outputjsonfile.write_text(to_json(content))
+
+
+def write_input_json_file_from_multiple_msas(
+    inputmsafiles: list[str | Path],
+    name: str,
+    outputjsonfile: str | Path,
+    includetemplates: bool = False,
+    savehmmsto: bool = False,
+    pdb_database_path: str | os.PathLike[str] | None = None,
+    seqres_database_path: str | os.PathLike[str] | None = None,
+    max_template_date: datetime.date = datetime.date(2099, 12, 31),
+    max_subsequence_ratio: float | None = 0.95,
+    hmmbuild_binary_path: str | None = shutil.which("hmmbuild"),
+    hmmsearch_binary_path: str | None = shutil.which("hmmsearch"),
+) -> None:
+    outputjsonfile = Path(outputjsonfile)
+    chain_msas = [_load_chain_msa_input(inputmsafile) for inputmsafile in inputmsafiles]
+    logger.info(
+        "The input MSA files are assigned to chains in order: "
+        + ", ".join(
+            f"{Path(inputmsafile).name}->chain {int_id_to_str_id(i + 1)}"
+            for i, inputmsafile in enumerate(inputmsafiles)
+        )
+    )
+    msa_output_dir = outputjsonfile.parent / f"{outputjsonfile.stem}_msas"
+    content = generate_input_json_content_from_chain_msas(
+        name=f"{name}",
+        chain_msas=chain_msas,
         msa_output_dir=msa_output_dir,
         json_parent_dir=outputjsonfile.parent,
         includetemplates=includetemplates,
@@ -222,7 +370,7 @@ def process_a3m_directory(
 
 
 def process_single_a3m_file(
-    inputmsafile: Path,
+    inputmsafiles: list[Path],
     outputjsonfile: Path,
     name: str | None = None,
     includetemplates: bool = False,
@@ -234,25 +382,43 @@ def process_single_a3m_file(
     hmmbuild_binary_path: str | None = shutil.which("hmmbuild"),
     hmmsearch_binary_path: str | None = shutil.which("hmmsearch"),
 ) -> None:
-    if inputmsafile.suffix != ".a3m":
-        raise ValueError("Input file must have .a3m extension.")
-    logger.info(f"Input A3M file: {inputmsafile}")
+    if not inputmsafiles:
+        raise ValueError("At least one input A3M file is required.")
+    for inputmsafile in inputmsafiles:
+        if inputmsafile.suffix != ".a3m":
+            raise ValueError("Input file must have .a3m extension.")
+    logger.info(f"Input A3M files: {', '.join(map(str, inputmsafiles))}")
     if outputjsonfile.suffix != ".json":
         raise ValueError("Output file must have .json extension.")
     logger.info(f"Output JSON file: {outputjsonfile}")
-    write_input_json_file(
-        inputmsafile=inputmsafile,
-        name=name or inputmsafile.stem,
-        outputjsonfile=outputjsonfile,
-        includetemplates=includetemplates,
-        savehmmsto=savehmmsto,
-        pdb_database_path=pdb_database_path,
-        seqres_database_path=seqres_database_path,
-        max_template_date=max_template_date,
-        max_subsequence_ratio=max_subsequence_ratio,
-        hmmbuild_binary_path=hmmbuild_binary_path,
-        hmmsearch_binary_path=hmmsearch_binary_path,
-    )
+    if len(inputmsafiles) == 1:
+        write_input_json_file(
+            inputmsafile=inputmsafiles[0],
+            name=name or inputmsafiles[0].stem,
+            outputjsonfile=outputjsonfile,
+            includetemplates=includetemplates,
+            savehmmsto=savehmmsto,
+            pdb_database_path=pdb_database_path,
+            seqres_database_path=seqres_database_path,
+            max_template_date=max_template_date,
+            max_subsequence_ratio=max_subsequence_ratio,
+            hmmbuild_binary_path=hmmbuild_binary_path,
+            hmmsearch_binary_path=hmmsearch_binary_path,
+        )
+    else:
+        write_input_json_file_from_multiple_msas(
+            inputmsafiles=inputmsafiles,
+            name=name or outputjsonfile.stem,
+            outputjsonfile=outputjsonfile,
+            includetemplates=includetemplates,
+            savehmmsto=savehmmsto,
+            pdb_database_path=pdb_database_path,
+            seqres_database_path=seqres_database_path,
+            max_template_date=max_template_date,
+            max_subsequence_ratio=max_subsequence_ratio,
+            hmmbuild_binary_path=hmmbuild_binary_path,
+            hmmsearch_binary_path=hmmsearch_binary_path,
+        )
 
 
 def main():
@@ -267,8 +433,12 @@ def main():
     parser.add_argument(
         "-i",
         "--input",
-        help="Input A3M file or directory containing A3M files. e.g. 1bjp.a3m",
+        help=(
+            "Input A3M file(s), or a directory containing A3M files. "
+            "When multiple files are provided, they are assigned to chain A, B, C..."
+        ),
         type=str,
+        nargs="+",
         required=True,
     )
     parser.add_argument(
@@ -342,12 +512,12 @@ def main():
     )
     args = parser.parse_args()
     log_setup(args.loglevel)
-    input_path = Path(args.input)
+    input_paths = [Path(path) for path in args.input]
     output_path = Path(args.out)
 
-    if input_path.is_dir():
+    if len(input_paths) == 1 and input_paths[0].is_dir():
         process_a3m_directory(
-            input_dir=input_path,
+            input_dir=input_paths[0],
             output_dir=output_path,
             includetemplates=args.include_templates,
             savehmmsto=args.save_hmmsto,
@@ -359,10 +529,14 @@ def main():
             hmmsearch_binary_path=args.hmmsearch_binary_path,
         )
     else:
+        if any(path.is_dir() for path in input_paths):
+            raise ValueError(
+                "Directory input cannot be combined with other inputs. Provide one directory or one/more A3M files."
+            )
         process_single_a3m_file(
-            inputmsafile=input_path,
+            inputmsafiles=input_paths,
             outputjsonfile=output_path,
-            name=args.name or input_path.stem,
+            name=args.name or None,
             includetemplates=args.include_templates,
             savehmmsto=args.save_hmmsto,
             pdb_database_path=args.pdb_database_path,
