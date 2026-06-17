@@ -17,6 +17,7 @@ PROG = "af3tools"
 # (mirrors README section order).
 SUBCOMMANDS: dict[str, str] = {
     "msatojson": "alphafold3tools.msatojson",
+    "msatojson3": "alphafold3tools.msatojson3",
     "fastatojson": "alphafold3tools.fastatojson",
     "modjson": "alphafold3tools.modjson",
     "paeplot": "alphafold3tools.paeplot",
@@ -29,6 +30,7 @@ SUBCOMMANDS: dict[str, str] = {
 
 _DESCRIPTIONS: dict[str, str] = {
     "msatojson": "Convert an a3m MSA file to AlphaFold3 input JSON.",
+    "msatojson3": "Convert an a3m MSA file to AlphaFold3 v4 JSON with MSA paths.",
     "fastatojson": "Convert a FASTA file to AlphaFold3 input JSON.",
     "modjson": "Add/remove ligand entities in an AlphaFold3 input JSON.",
     "paeplot": "Plot predicted aligned error (PAE) for AF3 outputs.",

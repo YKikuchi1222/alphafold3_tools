@@ -89,6 +89,16 @@ af3tools msatojson -i input.a3m -o output.json \
 > - The `pdb_seqres.txt` file can be downloaded from [wwPDB](https://files.rcsb.org/pub/pdb/derived_data/pdb_seqres.txt). The file size is about 356 MB (as of Dec. 2025).
 >
 
+### msatojson3
+
+`msatojson3` converts an a3m-formatted MSA file to an AlphaFold 3 `version: 4` JSON file. Unlike `msatojson`, it writes per-chain A3M files next to the output JSON and uses `unpairedMsaPath` / `pairedMsaPath` fields instead of embedding MSA text inline.
+
+```bash
+af3tools msatojson3 -i input.a3m -o input.json -n inputname
+```
+
+When the input is a directory, `msatojson3` writes one JSON file per input A3M and creates a sibling `<json_stem>_msas/` directory containing the chain-specific A3M files referenced from that JSON.
+
 ### fastatojson
 
 `fastatojson` is a command to convert a FASTA file to JSON format compatible with AlphaFold3.

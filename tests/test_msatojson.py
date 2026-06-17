@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -9,6 +10,7 @@ from alphafold3tools.msatojson import (
     int_id_to_str_id,
     split_a3msequences,
 )
+from alphafold3tools.msatojson3 import write_input_json_file as write_input_json_file_v4
 
 
 @pytest.fixture
@@ -169,3 +171,48 @@ class TestNoHeaderMSA:
         assert unpairedmsas[0][1].sequence.startswith(
             "PVVTIELWEGRTPEQKRELVRAVSSAISRVLGCPEEAVHVILHEVPKANWGIGGRLASEL--"
         )
+
+
+class TestMSAToJson3:
+    def test_write_input_json_file_v4_uses_msa_paths(self, tmp_path):
+        input_a3m = tmp_path / "testcomplexseqs.a3m"
+        input_a3m.write_text(Path("./testfiles/testcomplexseqs.a3m").read_text())
+        output_json = tmp_path / "testcomplexseqs.json"
+
+        write_input_json_file_v4(
+            inputmsafile=input_a3m,
+            name="testcomplexseqs",
+            outputjsonfile=output_json,
+            includetemplates=False,
+        )
+
+        content = json.loads(output_json.read_text())
+        assert content["dialect"] == "alphafold3"
+        assert content["version"] == 4
+        assert content["sequences"][0]["protein"]["unpairedMsaPath"] == (
+            "testcomplexseqs_msas/chain_1_unpaired.a3m"
+        )
+        assert content["sequences"][0]["protein"]["pairedMsaPath"] == (
+            "testcomplexseqs_msas/chain_1_paired.a3m"
+        )
+        assert "unpairedMsa" not in content["sequences"][0]["protein"]
+        assert (tmp_path / "testcomplexseqs_msas" / "chain_1_unpaired.a3m").exists()
+        assert (tmp_path / "testcomplexseqs_msas" / "chain_2_paired.a3m").exists()
+
+    def test_write_input_json_file_v4_monomer_keeps_empty_paired_msa(self, tmp_path):
+        input_a3m = tmp_path / "q.a3m"
+        input_a3m.write_text(Path("./testfiles/Q9I1F6-F1-msa_v6.a3m").read_text())
+        output_json = tmp_path / "q.json"
+
+        write_input_json_file_v4(
+            inputmsafile=input_a3m,
+            name="Q9I1F6",
+            outputjsonfile=output_json,
+            includetemplates=False,
+        )
+
+        content = json.loads(output_json.read_text())
+        protein = content["sequences"][0]["protein"]
+        assert protein["unpairedMsaPath"] == "q_msas/chain_1_unpaired.a3m"
+        assert protein["pairedMsa"] == ""
+        assert "pairedMsaPath" not in protein
