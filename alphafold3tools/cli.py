@@ -25,6 +25,7 @@ SUBCOMMANDS: dict[str, str] = {
     "superpose_ciffiles": "alphafold3tools.superpose_ciffiles",
     "sdftoccd": "alphafold3tools.sdftoccd",
     "jsontomsa": "alphafold3tools.jsontomsa",
+    "jsontoyaml": "alphafold3tools.jsontoyaml",
     "pdbtocif": "alphafold3tools.pdbtocif",
     "metrics": "alphafold3tools.metrics",
 }
@@ -39,6 +40,7 @@ _DESCRIPTIONS: dict[str, str] = {
     "superpose_ciffiles": "Superpose AF3 model.cif files into a multi-model CIF.",
     "sdftoccd": "Convert an SDF file to user-provided CCD (mmCIF).",
     "jsontomsa": "Extract a3m MSA from an AlphaFold3 input JSON.",
+    "jsontoyaml": "Convert an AlphaFold3 input JSON into Boltz YAML.",
     "pdbtocif": "Convert a PDB file to mmCIF format.",
     "metrics": "Calculate ipSAE / ipTM / pDockQ / LIS interaction metrics.",
 }

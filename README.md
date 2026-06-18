@@ -202,6 +202,22 @@ ccdCode MG
 
 Quoted and unquoted values are both accepted in the file input. If a line has 3 or more columns, `modjson3` stops with an error and reports the line number. `-a` and `-f` can be mixed, and chain IDs are assigned in appearance order continuing from the IDs already present in the input JSON.
 
+### jsontoyaml
+
+`jsontoyaml` converts an AlphaFold3 input JSON file into a Boltz-compatible YAML file.
+
+```bash
+af3tools jsontoyaml -i input.json -o output.yaml
+```
+
+Notes:
+
+- Protein `unpairedMsaPath` is mapped to Boltz `msa`.
+- If a protein only has inline `unpairedMsa`, `jsontoyaml` writes a sidecar `.a3m` file next to the YAML and points `msa` to it.
+- Ligand `smiles` are emitted with single quotes to match Boltz examples.
+- `bondedAtomPairs` are converted into Boltz `constraints: - bond:`.
+- `userCCD` / `userCCDPath` cannot be represented in Boltz YAML and will raise an error.
+
 ### paeplot
 
 `paeplot` is a command to plot the predicted aligned error (PAE). The color map can be specified with the `-c` option. The default color map is `bwr` (ColabFold-like), but `Greens_r` is also available for AlphaFold Structure Database (AFDB)-like coloring.
