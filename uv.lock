@@ -21,6 +21,7 @@ dependencies = [
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "pip" },
+    { name = "pyyaml" },
     { name = "rdkit" },
     { name = "scipy" },
 ]
@@ -45,6 +46,7 @@ requires-dist = [
     { name = "matplotlib" },
     { name = "numpy", specifier = ">=2.0.1" },
     { name = "pip" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "rdkit", specifier = ">=2024.3.2" },
     { name = "scipy", specifier = ">=1.14.0" },
 ]

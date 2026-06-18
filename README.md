@@ -216,7 +216,24 @@ Notes:
 - If a protein only has inline `unpairedMsa`, `jsontoyaml` writes a sidecar `.a3m` file next to the YAML and points `msa` to it.
 - Ligand `smiles` are emitted with single quotes to match Boltz examples.
 - `bondedAtomPairs` are converted into Boltz `constraints: - bond:`.
-- `userCCD` / `userCCDPath` cannot be represented in Boltz YAML and will raise an error.
+- `userCCD` / `userCCDPath` cannot be represented in Boltz YAML and are omitted with a warning to standard error.
+
+### yamltojson
+
+`yamltojson` converts a Boltz YAML file into an AlphaFold3 input JSON file.
+
+```bash
+af3tools yamltojson -i input.yaml -o output.json
+```
+
+Notes:
+
+- Protein `msa: path/to/file.a3m` becomes `unpairedMsaPath` plus `pairedMsa: ""`.
+- Protein `msa: empty` becomes `unpairedMsa: ""` and `pairedMsa: ""`.
+- Ligand `ccd` becomes AF3 `ccdCodes`.
+- Boltz `constraints: - bond:` becomes AF3 `bondedAtomPairs`.
+- Boltz-only fields like `properties`, `constraints.pocket`, `constraints.contact`, and `templates` are ignored with warnings to standard error.
+- Protein `msa` in CSV format is rejected because it cannot be converted safely into AF3 MSA fields.
 
 ### paeplot
 

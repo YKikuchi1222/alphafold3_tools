@@ -27,6 +27,7 @@ SUBCOMMANDS: dict[str, str] = {
     "jsontomsa": "alphafold3tools.jsontomsa",
     "jsontoyaml": "alphafold3tools.jsontoyaml",
     "pdbtocif": "alphafold3tools.pdbtocif",
+    "yamltojson": "alphafold3tools.yamltojson",
     "metrics": "alphafold3tools.metrics",
 }
 
@@ -42,6 +43,7 @@ _DESCRIPTIONS: dict[str, str] = {
     "jsontomsa": "Extract a3m MSA from an AlphaFold3 input JSON.",
     "jsontoyaml": "Convert an AlphaFold3 input JSON into Boltz YAML.",
     "pdbtocif": "Convert a PDB file to mmCIF format.",
+    "yamltojson": "Convert a Boltz YAML file into AlphaFold3 input JSON.",
     "metrics": "Calculate ipSAE / ipTM / pDockQ / LIS interaction metrics.",
 }
 
